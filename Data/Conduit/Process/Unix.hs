@@ -61,7 +61,9 @@ import           System.Process.Internals        (ProcessHandle (..),
                                                   ProcessHandle__ (..))
 
 processHandleMVar :: ProcessHandle -> MVar ProcessHandle__
-#if MIN_VERSION_process(1, 2, 0)
+#if MIN_VERSION_process(1, 6, 0)
+processHandleMVar (ProcessHandle m _ _) = m
+#elif MIN_VERSION_process(1, 2, 0)
 processHandleMVar (ProcessHandle m _) = m
 #else
 processHandleMVar (ProcessHandle m) = m
@@ -83,6 +85,11 @@ killProcess ph = withProcessHandle_ ph $ \p_ ->
         OpenHandle h -> do
             signalProcess sigKILL h
             return p_
+#if MIN_VERSION_process(1, 5, 0)
+        OpenExtHandle h _ _ -> do
+            signalProcess sigKILL h
+            return p_
+#endif
 
 ignoreExceptions :: IO () -> IO ()
 ignoreExceptions = handle (\(_ :: SomeException) -> return ())
@@ -158,6 +165,11 @@ trackProcess pt ph = mask_ $ do
         OpenHandle pid -> do
             c_track_process pt pid 1
             return $ Pid pid
+#if MIN_VERSION_process(1, 5, 0)
+        OpenExtHandle pid _ _ -> do
+            c_track_process pt pid 1
+            return $ Pid pid
+#endif
     ipid <- newIORef mpid'
     baton <- newEmptyMVar
     let tp = TrackedProcess pt ipid (takeMVar baton)
@@ -225,6 +237,9 @@ forkExecuteLog cmd args menv mwdir mstdin rlog = bracketOnError
             , child_group = Nothing
             , child_user = Nothing
 #endif
+#if MIN_VERSION_process(1, 5, 0)
+            , use_process_jobs = False
+#endif
             }
         ignoreExceptions $ addAttachMessage pipes ph
         void $ forkIO $ ignoreExceptions $
@@ -256,6 +271,16 @@ forkExecuteLog cmd args menv mwdir mstdin rlog = bracketOnError
                     , S8.pack $ show h
                     , "\n\n"
                     ]
+#if MIN_VERSION_process(1, 5, 0)
+            OpenExtHandle h {-job-} {-io-} -> do
+                rlog $ S8.concat
+                    [ "\n\n"
+                    , S8.pack $ show now
+                    , ": Attached new process "
+                    , S8.pack $ show h
+                    , "\n\n"
+                    ]
+#endif
         return p_
 
 data Status = NeedsRestart | NoRestart | Running ProcessHandle
