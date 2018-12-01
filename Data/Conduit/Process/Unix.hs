@@ -272,7 +272,7 @@ forkExecuteLog cmd args menv mwdir mstdin rlog = bracketOnError
                     , "\n\n"
                     ]
 #if MIN_VERSION_process(1, 5, 0)
-            OpenExtHandle h {-job-} {-io-} -> do
+            OpenExtHandle h _ _ -> do
                 rlog $ S8.concat
                     [ "\n\n"
                     , S8.pack $ show now
